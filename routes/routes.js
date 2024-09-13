@@ -65,6 +65,76 @@ router.get('/current', async (req, res) => {
         });
     }
 });
+// 新增路由：获取7天天气预报
+router.get('/forecast', async (req, res) => {
+    try {
+        // Step 1: Get API key
+        const geoApiKey = process.env.API_KEY;
+        console.log('API Key:', geoApiKey);
+        if (!geoApiKey) {
+            throw new Error('API key is missing');
+        }
+
+        // Step 2: Set up Geoapify request
+        const cityName = "Hamilton";
+        const geoUrl = `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(cityName)}&filter=countrycode:nz&apiKey=${geoApiKey}`;
+        console.log('Geoapify URL:', geoUrl);
+
+        // Step 3: Make Geoapify request
+        let geoResponse;
+        try {
+            geoResponse = await axios.get(geoUrl);
+        } catch (geoError) {
+            console.error('Geoapify request failed:', geoError.message);
+            throw new Error('Failed to fetch location data');
+        }
+
+        // Step 4: Process Geoapify response
+        const geoData = geoResponse.data;
+        console.log('Geo Data:', JSON.stringify(geoData, null, 2));
+
+        if (!geoData.features || geoData.features.length === 0) {
+            throw new Error('No location data found');
+        }
+
+        const latitude = geoData.features[0].properties.lat;
+        const longitude = geoData.features[0].properties.lon;
+
+        // Step 5: Set up Open-Meteo request
+        const forecastUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&daily=temperature_2m_max,temperature_2m_min&timezone=Pacific%2FAuckland&forecast_days=7`;
+        console.log('Forecast URL:', forecastUrl);
+
+        // Step 6: Make Open-Meteo request
+        let forecastResponse;
+        try {
+            forecastResponse = await axios.get(forecastUrl);
+        } catch (forecastError) {
+            console.error('Open-Meteo request failed:', forecastError.message);
+            throw new Error('Failed to fetch forecast data');
+        }
+
+        // Step 7: Process forecast data
+        const forecastData = forecastResponse.data;
+        console.log('Forecast Data:', JSON.stringify(forecastData, null, 2));
+
+        const forecast = forecastData.daily.time.map((date, index) => ({
+            date: new Date(date).toLocaleDateString('en-NZ', { weekday: 'long', month: 'short', day: 'numeric' }),
+            maxTemp: `${forecastData.daily.temperature_2m_max[index]}°C`,
+            minTemp: `${forecastData.daily.temperature_2m_min[index]}°C`
+        }));
+
+        console.log('Processed Forecast:', JSON.stringify(forecast, null, 2));
+
+        // Step 8: Render the forecast view
+        res.render('forecast', { forecast });
+    } catch (error) {
+        console.error('Detailed error:', error.message);
+        res.render('forecast', {
+            error: `Unable to load forecast data: ${error.message}`
+        });
+    }
+});
+
 
 
 router.get('/map', (req, res) => {
